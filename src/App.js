@@ -407,10 +407,10 @@ export default function App() {
 // ============================================================
 function Sidebar({ page, setPage, dark, setDark, c, stmtCount }) {
   const nav = [
-    { id: "dashboard", icon: "◈", label: "ダッシュボード" },
-    { id: "upload", icon: "↑", label: "精算書アップロード" },
-    { id: "statements", icon: "≡", label: "精算書一覧", badge: stmtCount },
-    { id: "settings", icon: "⚙", label: "設定" },
+    { id: "dashboard", label: "ダッシュボード" },
+    { id: "upload", label: "精算書アップロード" },
+    { id: "statements", label: "精算書一覧", badge: stmtCount },
+    { id: "settings", label: "設定" },
   ];
   return (
     <aside className="sidebar" style={{ width: 220, background: c.sidebar, borderRight: `1px solid ${c.border}`, display: "flex", flexDirection: "column", padding: "20px 0", flexShrink: 0 }}>
@@ -428,7 +428,6 @@ function Sidebar({ page, setPage, dark, setDark, c, stmtCount }) {
             borderLeft: `3px solid ${page === n.id ? c.accent : "transparent"}`,
             transition: "all 0.15s",
           }}>
-            <span style={{ fontSize: 16, width: 20, textAlign: "center" }}>{n.icon}</span>
             <span style={{ flex: 1, textAlign: "left" }}>{n.label}</span>
             {n.badge > 0 && <span style={{ background: c.accent, color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 10, fontWeight: 700 }}>{n.badge}</span>}
           </button>
@@ -545,12 +544,17 @@ function Dashboard({ c, period, setPeriod, productStats, totalAmount, totalQty, 
         <div style={{ fontSize: 15, fontWeight: 700, color: c.text }}>商品別 売上リスト</div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <div style={{ position: "relative" }}>
-            <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: c.muted, fontSize: 12 }}>🔍</span>
+            <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: c.muted, display: "flex", alignItems: "center", pointerEvents: "none" }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.7 }}>
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.35-4.35" />
+              </svg>
+            </span>
             <input placeholder="商品名で検索..." value={search} onChange={(e) => setSearch(e.target.value)}
-              style={{ ...inputStyle(c), paddingLeft: 30, width: 180, fontSize: 12 }} />
+              style={{ ...inputStyle(c), paddingLeft: 34, width: 180, fontSize: 12 }} />
           </div>
           <button onClick={onManual} style={btnSecondary(c)}>＋ 手動追加</button>
-          <button onClick={onExport} style={btnPrimary(c)}>↓ CSV</button>
+          <button onClick={onExport} style={btnSecondary(c)}>↓ CSV</button>
         </div>
       </div>
 
@@ -694,7 +698,7 @@ function UploadPage({ c, uploading, uploadProgress, onFiles, fileInputRef, onBac
             <span style={{ fontSize: 12, color: c.muted }}>{v}</span>
           </div>
         ))}
-        <div style={{ marginTop: 12, padding: "10px 12px", background: c.accentBg, borderRadius: 8, fontSize: 12, color: c.accent }}>
+        <div style={{ marginTop: 12, padding: "10px 12px", background: c.warningBg, borderRadius: 8, fontSize: 12, color: c.warningText, border: `1px solid ${c.warningBorder}` }}>
           ⚠ 原画・原作品など一点物は在庫集計から自動除外されます
         </div>
       </div>
@@ -926,11 +930,13 @@ const colors = {
     border: "#E0E0E0", accent: "#111111", accentBg: "#F0F0F0", accentLight: "#AAAAAA",
     mutedBg: "#EFEFEF", tableHead: "#F7F7F7", rowAlt: "#FAFAFA", rowHover: "#F0F0F0",
     danger: "#555555",
+    warningBg: "#fff3cd", warningText: "#856404", warningBorder: "#ffc107",
   },
   dark: {
     bg: "#111111", card: "#1A1A1A", sidebar: "#161616", text: "#F0F0F0", muted: "#777777",
     border: "#2E2E2E", accent: "#F0F0F0", accentBg: "#242424", accentLight: "#999999",
     mutedBg: "#202020", tableHead: "#141414", rowAlt: "#181818", rowHover: "#242424",
     danger: "#AAAAAA",
+    warningBg: "#3d3500", warningText: "#e6c64c", warningBorder: "#6b5a00",
   },
 };
