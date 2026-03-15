@@ -476,13 +476,14 @@ function DeleteButton({ onConfirm, c }) {
 // ============================================================
 // DASHBOARD
 // ============================================================
+const YEAR_MIN = 2000; // プルダウンに表示する最古の年
+
 function Dashboard({ c, period, setPeriod, productStats, totalAmount, totalQty, search, setSearch, sortCol, setSortCol, sortDir, setSortDir, onManual, onExport, onUpload, onDeleteProduct, saleRecords, statements, productCount }) {
-  const y = new Date().getFullYear();
-  const presets = [
-    { label: `${y}年`, from: `${y}-01-01`, to: `${y}-12-31` },
-    { label: `${y - 1}年`, from: `${y - 1}-01-01`, to: `${y - 1}-12-31` },
-    { label: "全期間", from: "2000-01-01", to: "2099-12-31" },
-  ];
+  const currentYear = new Date().getFullYear();
+  const yearOptions = Array.from(
+    { length: currentYear - YEAR_MIN + 1 },
+    (_, i) => currentYear - i
+  ); // [2026, 2025, 2024, ...]
 
   function toggleSort(col) {
     if (sortCol === col) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -506,15 +507,18 @@ function Dashboard({ c, period, setPeriod, productStats, totalAmount, totalQty, 
             <span style={{ fontSize: 15 }}>↑</span> 精算書をアップロード
           </button>
           <div style={{ width: 1, height: 24, background: c.border, margin: "0 2px" }} />
-          {presets.map((p) => (
-            <button key={p.label} onClick={() => setPeriod({ from: p.from, to: p.to })}
-              style={{ ...btnSmall(c), background: period.from === p.from && period.to === p.to ? c.accent : c.card, color: period.from === p.from && period.to === p.to ? c.bg : c.text }}>
-              {p.label}
-            </button>
-          ))}
-          <input type="date" value={period.from} onChange={(e) => setPeriod((prev) => ({ ...prev, from: e.target.value }))} style={{ ...inputStyle(c), fontSize: 12, padding: "5px 8px" }} />
-          <span style={{ color: c.muted, fontSize: 12 }}>〜</span>
-          <input type="date" value={period.to} onChange={(e) => setPeriod((prev) => ({ ...prev, to: e.target.value }))} style={{ ...inputStyle(c), fontSize: 12, padding: "5px 8px" }} />
+          <select
+            value={period.from.slice(0, 4)}
+            onChange={(e) => {
+              const y = Number(e.target.value);
+              setPeriod({ from: `${y}-01-01`, to: `${y}-12-31` });
+            }}
+            style={{ ...inputStyle(c), fontSize: 13, padding: "6px 12px", minWidth: 88 }}
+          >
+            {yearOptions.map((y) => (
+              <option key={y} value={y}>{y}年</option>
+            ))}
+          </select>
         </div>
       </div>
 
