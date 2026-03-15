@@ -415,7 +415,7 @@ function Sidebar({ page, setPage, dark, setDark, c, stmtCount }) {
   return (
     <aside className="sidebar" style={{ width: 220, background: c.sidebar, borderRight: `1px solid ${c.border}`, display: "flex", flexDirection: "column", padding: "20px 0", flexShrink: 0 }}>
       <div style={{ padding: "0 20px 24px", borderBottom: `1px solid ${c.border}` }}>
-        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: c.accent, textTransform: "uppercase", marginBottom: 4 }}>Inventory</div>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: c.accent, textTransform: "uppercase", marginBottom: 4 }}>ORITAKEI</div>
         <div style={{ fontSize: 18, fontWeight: 700, color: c.text, lineHeight: 1.2 }}>在庫管理</div>
       </div>
       <nav style={{ flex: 1, padding: "12px 0" }}>
