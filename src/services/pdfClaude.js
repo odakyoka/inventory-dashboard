@@ -1,6 +1,7 @@
 /**
  * PDF 重複検出・テキスト抽出・Claude API 呼び出しを集約したモジュール。
  * Token 節約・重複検出・プロンプト変更はこのファイルのみ編集すればよい。
+ * 利用上限・ローカル専用制限により不用意な従量課金と公開環境でのキー露出を防止する。
  */
 
 // --- Token 関連定数（改修時はここを変更） ---
@@ -11,6 +12,72 @@ const CLAUDE_PROMPT = `JSONのみ。説明不要。
 
 // テキスト送信時のプレフィックス（短くして Token 節約）
 const TEXT_PREFIX = "精算書:\n\n";
+
+// --- 従量課金の上限（日本円/月）・レート（円/100万トークン、Claude Sonnet 目安） ---
+const MONTHLY_JPY_LIMIT = 100;
+const INPUT_JPY_PER_1M = 500;
+const OUTPUT_JPY_PER_1M = 2500;
+const USAGE_STORAGE_KEY = "claude_usage_v1";
+
+function currentMonthKey() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function loadUsage() {
+  try {
+    const raw = typeof localStorage !== "undefined" ? localStorage.getItem(USAGE_STORAGE_KEY) : null;
+    const data = raw ? JSON.parse(raw) : null;
+    if (data && data.month === currentMonthKey()) return data;
+  } catch {}
+  return { month: currentMonthKey(), inputTokens: 0, outputTokens: 0 };
+}
+
+function saveUsage(usage) {
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(USAGE_STORAGE_KEY, JSON.stringify(usage));
+    }
+  } catch {}
+}
+
+function usedJpy(inputTokens = 0, outputTokens = 0) {
+  return (inputTokens / 1e6) * INPUT_JPY_PER_1M + (outputTokens / 1e6) * OUTPUT_JPY_PER_1M;
+}
+
+/** 今月の利用状況。UI のバナー・設定画面用 */
+export function getUsageStatus() {
+  const u = loadUsage();
+  const jpy = usedJpy(u.inputTokens, u.outputTokens);
+  return {
+    month: u.month,
+    usedJpy: Math.round(jpy * 10) / 10,
+    limitJpy: MONTHLY_JPY_LIMIT,
+    limitReached: jpy >= MONTHLY_JPY_LIMIT,
+    inputTokens: u.inputTokens,
+    outputTokens: u.outputTokens,
+  };
+}
+
+function checkAndRecordUsage(responseUsage) {
+  const u = loadUsage();
+  const inp = (responseUsage && responseUsage.input_tokens) || 0;
+  const out = (responseUsage && responseUsage.output_tokens) || 0;
+  u.inputTokens += inp;
+  u.outputTokens += out;
+  saveUsage(u);
+}
+
+/** API をローカル以外で叩かない（Public リポジトリでのキー悪用・露出防止） */
+function assertLocalOnly() {
+  if (typeof window === "undefined") return;
+  const ok = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  if (!ok) {
+    throw new Error(
+      "Claude API はローカル環境（localhost）でのみ利用できます。公開 URL にデプロイした場合、API キーをクライアントに含めないでください。"
+    );
+  }
+}
 
 // ============================================================
 // PDF.js dynamic loader
@@ -119,6 +186,15 @@ async function buildContent(extractedText, isScanned, pdfFile) {
 // Claude API で精算書から JSON 抽出
 // ============================================================
 export async function extractDataWithClaude(pdfFile, extractedText, isScanned) {
+  assertLocalOnly();
+
+  const status = getUsageStatus();
+  if (status.limitReached) {
+    throw new Error(
+      `今月のAPI利用上限（${status.limitJpy}円相当）に達しました。精算書の解析は来月までお待ちください。`
+    );
+  }
+
   const content = await buildContent(extractedText, isScanned, pdfFile);
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -146,6 +222,15 @@ export async function extractDataWithClaude(pdfFile, extractedText, isScanned) {
     throw new Error(`Claude API: ${data.error.message}`);
   }
 
+  checkAndRecordUsage(data.usage);
+
+  return parseClaudeExtractionResponse(data);
+}
+
+/**
+ * Claude API の messages レスポンスから精算書 JSON を抽出する（API 境界のテスト用に公開）
+ */
+export function parseClaudeExtractionResponse(data) {
   const rawText = data.content?.map((c) => c.text || "").join("") ?? "";
   const clean = rawText.replace(/```json|```/g, "").trim();
   const match = clean.match(/\{[\s\S]*\}/);
