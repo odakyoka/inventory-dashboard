@@ -1,8 +1,13 @@
-import { render, screen } from '@testing-library/react';
-import App from './App';
+import { render, screen } from "@testing-library/react";
+import App from "./App";
 
-test('renders learn react link', () => {
+// jsdom に matchMedia がないためモック（App の useState 初期化で使用）
+const matchMediaMock = () => ({ matches: false, addListener: () => {}, removeListener: () => {}, addEventListener: () => {}, removeEventListener: () => {} });
+beforeAll(() => {
+  Object.defineProperty(window, "matchMedia", { value: matchMediaMock, writable: true });
+});
+
+test("renders app title", () => {
   render(<App />);
-  const linkElement = screen.getByText(/learn react/i);
-  expect(linkElement).toBeInTheDocument();
+  expect(screen.getByText("ORITAKEI")).toBeInTheDocument();
 });

@@ -3,7 +3,9 @@ import {
   getPdfUploadInfo,
   extractTextFromPDF,
   extractDataWithClaude,
+  getUsageStatus,
 } from "./services/pdfClaude";
+import { filterRecordsByPeriod, applyExtractionToDb } from "./lib/inventoryLogic";
 
 // ============================================================
 // STORAGE HELPERS
@@ -91,6 +93,9 @@ export default function App() {
   // Notify
   const [toast, setToast] = useState(null);
 
+  // API 利用上限（100円/月）の表示用。API 使用後に更新する
+  const [usageStatus, setUsageStatus] = useState(() => getUsageStatus());
+
   const fileInputRef = useRef();
 
   useEffect(() => { saveData(db); }, [db]);
@@ -110,13 +115,10 @@ export default function App() {
   }
 
   // ---- COMPUTED ----
-  const filteredRecords = useMemo(() => {
-    return db.saleRecords.filter((r) => {
-      if (!r.saleDate) return true;
-      const d = r.saleDate;
-      return d >= period.from && d <= period.to;
-    });
-  }, [db.saleRecords, period]);
+  const filteredRecords = useMemo(
+    () => filterRecordsByPeriod(db.saleRecords, period),
+    [db.saleRecords, period]
+  );
 
   const productStats = useMemo(() => {
     const map = {};
@@ -178,6 +180,7 @@ export default function App() {
         }
         setMergeProposals(proposals);
         setExtractedItems(result.items.map((i) => ({ ...i, include: !i.isOriginalArtwork, _id: uuid() })));
+        setUsageStatus(getUsageStatus());
       } catch (e) {
         showToast(`${file.name}: ${e.message}`, "error");
       }
@@ -187,65 +190,7 @@ export default function App() {
   }
 
   function confirmExtraction(items, stmt, merges) {
-    // 深いコピーでミューテーション問題を回避
-    const newDb = {
-      statements: [...db.statements],
-      saleRecords: [...db.saleRecords],
-      products: db.products.map((p) => ({ ...p, aliases: [...p.aliases] })),
-    };
-    newDb.statements = [...newDb.statements, { ...stmt }];
-
-    // resolve merge decisions
-    const mergeMap = {};
-    for (const m of merges) {
-      if (m.decision === "merge") mergeMap[m.rawName] = m.existingId;
-      else if (m.decision === "new") mergeMap[m.rawName] = null;
-    }
-
-    for (const item of items) {
-      if (!item.include) continue;
-
-      let existing = newDb.products.find(
-        (p) => p.canonicalName === item.rawName || p.aliases.includes(item.rawName)
-      );
-      if (!existing && mergeMap[item.rawName] !== undefined && mergeMap[item.rawName]) {
-        existing = newDb.products.find((p) => p.id === mergeMap[item.rawName]);
-        if (existing && !existing.aliases.includes(item.rawName)) {
-          existing.aliases = [...existing.aliases, item.rawName];
-        }
-      }
-
-      let productId;
-      if (existing) {
-        productId = existing.id;
-        if (item.unitPrice != null) existing.latestUnitPrice = item.unitPrice;
-      } else {
-        const newProd = {
-          id: uuid(),
-          canonicalName: item.rawName,
-          aliases: [],
-          latestUnitPrice: item.unitPrice ?? null,
-          isExcluded: false,
-          createdAt: new Date().toISOString(),
-        };
-        newDb.products = [...newDb.products, newProd];
-        productId = newProd.id;
-      }
-
-      newDb.saleRecords = [
-        ...newDb.saleRecords,
-        {
-          id: uuid(),
-          productId,
-          statementId: stmt.id,
-          quantity: item.quantity ?? 0,
-          unitPrice: item.unitPrice ?? 0,
-          saleDate: stmt.statementDate,
-          source: "pdf",
-        },
-      ];
-    }
-
+    const newDb = applyExtractionToDb(db, items, stmt, merges, uuid);
     setDb(newDb);
     setExtractedItems(null);
     setPendingStatement(null);
@@ -310,6 +255,13 @@ export default function App() {
       {toast && (
         <div style={{ position: "fixed", top: 20, right: 20, zIndex: 9999, background: toast.type === "error" ? c.danger : c.accent, color: c.bg, padding: "10px 18px", borderRadius: 10, fontSize: 13, fontWeight: 600, boxShadow: "0 4px 20px rgba(0,0,0,0.2)", animation: "fadeIn 0.2s ease" }}>
           {toast.msg}
+        </div>
+      )}
+
+      {/* API 利用上限バナー（100円/月超過時） */}
+      {usageStatus.limitReached && (
+        <div style={{ background: c.warningBg, color: c.warningText, padding: "10px 24px", fontSize: 13, fontWeight: 600, textAlign: "center", borderBottom: `1px solid ${c.warningBorder}` }}>
+          ⚠ 今月のAPI利用上限（{usageStatus.limitJpy}円相当）に達しました。精算書の解析は来月までお待ちください。
         </div>
       )}
 
@@ -864,6 +816,24 @@ function SettingsPage({ c, db, setDb, showToast }) {
   return (
     <div>
       <div style={{ fontSize: 22, fontWeight: 700, color: c.text, marginBottom: 24 }}>設定</div>
+
+      <Section title="Claude API 利用状況" c={c}>
+        {(() => {
+          const u = getUsageStatus();
+          return (
+            <div>
+              <div style={{ fontSize: 13, color: c.text, marginBottom: 8 }}>
+                今月（{u.month}）の利用目安: <strong>約{u.usedJpy}円</strong> / {u.limitJpy}円
+              </div>
+              {u.limitReached ? (
+                <div style={{ fontSize: 12, color: c.warningText, marginTop: 4 }}>上限に達しています。精算書の解析は来月までお待ちください。</div>
+              ) : (
+                <div style={{ fontSize: 12, color: c.muted }}>入力トークン: {u.inputTokens.toLocaleString()} / 出力: {u.outputTokens.toLocaleString()}（目安はClaude Sonnetの料金で換算）</div>
+              )}
+            </div>
+          );
+        })()}
+      </Section>
 
       <Section title="データ管理" c={c}>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
